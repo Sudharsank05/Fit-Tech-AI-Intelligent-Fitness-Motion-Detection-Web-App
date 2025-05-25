@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Upload Video</title>
+</head>
+<body>
+    <h2>Welcome, {{ username }}</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <label for="event_type">Event Type:</label>
+        <select name="event_type">
+            <option value="hammer">Hammer Throw</option>
+            <option value="discus">Discus Throw</option>
+            <option value="shot_put">Shot Put</option>
+        </select>
+        <label for="file">Upload Video:</label>
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+</body>
+</html>

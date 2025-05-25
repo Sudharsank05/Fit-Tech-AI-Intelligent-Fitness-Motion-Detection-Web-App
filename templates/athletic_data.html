@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Athletic Performancee Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #dashboard {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        #improvement-chart {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Athletic Performance Dashboard</h1>
+    <div id="input-section">
+        <h2>Enter Performance Data</h2>
+        <form id="data-form">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" required><br><br>
+
+            <label for="gender">Gender:</label>
+            <select id="gender" name="gender" required>
+                <option value="men">Men</option>
+                <option value="women">Women</option>
+            </select><br><br>
+
+            <label for="weight">Weight (kg):</label>
+            <input type="number" id="weight" name="weight" required><br><br>
+
+            <label for="height">Height (cm):</label>
+            <input type="number" id="height" name="height" required><br><br>
+
+            <label for="event">Event:</label>
+            <select id="event" name="event" required>
+                <option value="hammer">Hammer Throw</option>
+                <option value="shot_put">Shot Put</option>
+                <option value="discus">Discus Throw</option>
+            </select><br><br>
+
+            <label for="distance">Distance (m):</label>
+            <input type="number" id="distance" name="distance" step="0.01" required><br><br>
+
+            <button type="button" onclick="addData()">Submit</button>
+        </form>
+    </div>
+
+    <div id="dashboard">
+        <h2>Performance Data</h2>
+        <label for="gender-filter">Gender:</label>
+        <select id="gender-filter" onchange="fetchData()">
+            <option value="men">Men</option>
+            <option value="women">Women</option>
+        </select>
+
+        <label for="event-filter">Event:</label>
+        <select id="event-filter" onchange="fetchData()">
+            <option value="hammer">Hammer Throw</option>
+            <option value="shot_put">Shot Put</option>
+            <option value="discus">Discus Throw</option>
+        </select>
+
+        <table id="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Gender</th>
+                    <th>Weight (kg)</th>
+                    <th>Height (cm)</th>
+                    <th>Event</th>
+                    <th>Distance (m)</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data will be populated here -->
+            </tbody>
+        </table>
+
+        <h3>Final Destination:</h3>
+        <p id="final-destination">N/A</p>
+
+        <h3>Performance Improvement Bar Chart</h3>
+        <canvas id="improvement-chart" width="400" height="200"></canvas>
+
+        <h3>Leaderboard</h3>
+        <div id="leaderboard">
+            <!-- Leaderboard will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        function addData() {
+            const formData = {
+                name: document.getElementById('name').value,
+                gender: document.getElementById('gender').value,
+                weight: parseFloat(document.getElementById('weight').value),
+                height: parseFloat(document.getElementById('height').value),
+                event: document.getElementById('event').value,
+                distance: parseFloat(document.getElementById('distance').value),
+                date: new Date().toISOString().split('T')[0] // current date in YYYY-MM-DD format
+            };
+
+            fetch('/athletic_data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Data added successfully!');
+                    fetchData(); // refresh the data table
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function fetchData() {
+            const gender = document.getElementById('gender-filter').value;
+            const event = document.getElementById('event-filter').value;
+
+            fetch(`/athletic_data/${event}?gender=${gender}`)
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.querySelector('#data-table tbody');
+                    tableBody.innerHTML = ''; // clear the table
+
+                    data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${row.name}</td>
+                            <td>${row.gender}</td>
+                            <td>${row.weight}</td>
+                            <td>${row.height}</td>
+                            <td>${row.event}</td>
+                            <td>${row.distance}</td>
+                            <td>${row.date}</td>
+                        `;
+                        tableBody.appendChild(tr);
+                    });
+
+                    fetchFinalDestination();
+                    updateChart(gender, event);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function fetchFinalDestination() {
+            const gender = document.getElementById('gender-filter').value;
+            const event = document.getElementById('event-filter').value;
+
+            fetch(`/athletic_data/${event}?gender=${gender}`)
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('final-destination').textContent = data.final_destination || 'N/A';
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function updateChart(gender, event) {
+            fetch(`/athletic_data/${event}?gender=${gender}`)
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('improvement-chart').getContext('2d');
+
+                    if (window.improvementChart) {
+                        window.improvementChart.destroy();
+                    }
+
+                    const currentData = data.current_data.map(row => ({date: row[0], distance: row[1]}));
+                    const previousData = data.previous_data.map(row => ({date: row[0], distance: row[1]}));
+
+                    const worldRecords = {
+                        'men': {
+                            'hammer': 86.74,
+                            'shot_put': 23.37,
+                            'discus': 74.08
+                        },
+                        'women': {
+                            'hammer': 82.98,
+                            'shot_put': 22.63,
+                            'discus': 76.80
+                        }
+                    };
+
+                    const maxYValue = worldRecords[gender][event] || 100;
+
+                    window.improvementChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: currentData.map(d => d.date),
+                            datasets: [
+                                {
+                                    label: 'Current Month',
+                                    data: currentData.map(d => d.distance),
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    borderWidth: 1
+                                },
+                                {
+                                    label: 'Previous Month',
+                                    data: previousData.map(d => d.distance),
+                                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                    borderColor: 'rgba(255, 99, 132, 1)',
+                                    borderWidth: 1
+                                }
+                            ]
+                        },
+                        options: {
+                            scales: {
+                                x: {
+                                    title: {
+                                        display: true,
+                                        text: 'Date'
+                                    }
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    min: 0,
+                                    max: maxYValue,
+                                    title: {
+                                        display: true,
+                                        text: 'Distance (m)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        window.onload = fetchData;
+    </script>
+</body>
+</html>
